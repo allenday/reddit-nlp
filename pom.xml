@@ -11,8 +11,8 @@
   </parent>
 
   <groupId>com.google.cloud.dataflow</groupId>
-  <artifactId>DataflowTutorials</artifactId>
-  <name>Google Cloud Dataflow Java Tutorials</name>
+  <artifactId>reddit-nlp</artifactId>
+  <name>Reddit NLP on Google Cloud Dataflow</name>
 
   <version>0.0.1</version>
 
