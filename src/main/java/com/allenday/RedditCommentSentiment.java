@@ -144,9 +144,13 @@ public class RedditCommentSentiment {
     					}
     					row.set("entities", entityRecords);	      					
     					c.output(row);
-						} catch (IOException e) {
-							// TODO Auto-generated catch block
-							e.printStackTrace();
+						} catch (Exception e) {
+							LOG.error("language API exception, sleeping 10s...");
+							try {
+								Thread.sleep(10000);
+							} catch (InterruptedException e1) {
+								LOG.error("failed to sleep:\n" + e1.getStackTrace());
+							}
 						}    					
     		  }
     	  })
