@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.beam.runners.dataflow.DataflowRunner;
 import org.apache.beam.runners.dataflow.options.DataflowPipelineOptions;
 import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.sdk.PipelineResult;
@@ -71,9 +72,10 @@ public class RedditCommentSentiment {
 		pipeOptions.setWorkerMachineType("n1-highcpu-64");
 		pipeOptions.setProject("allenday-dev");
 		pipeOptions.setZone("us-east1-d");
+		pipeOptions.setRunner(DataflowRunner.class);
 
     Pipeline pipeline = Pipeline.create(pipeOptions);
-    
+ 
     TableReference oTableRef = new TableReference();
     oTableRef.setProjectId(pipeOptions.getProject());
     oTableRef.setDatasetId("reddit_nlp");
