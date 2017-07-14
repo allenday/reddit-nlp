@@ -7,6 +7,7 @@ import java.util.Map;
 
 import org.apache.beam.runners.dataflow.DataflowRunner;
 import org.apache.beam.runners.dataflow.options.DataflowPipelineOptions;
+import org.apache.beam.runners.dataflow.options.DataflowWorkerLoggingOptions.Level;
 import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.sdk.PipelineResult;
 import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO;
@@ -66,24 +67,26 @@ public class RedditCommentSentiment {
 	public static void main(String[] args) throws IOException {
     //Options options = PipelineOptionsFactory.fromArgs(args).withValidation().as(Options.class);
     DataflowPipelineOptions pipeOptions = PipelineOptionsFactory.as(DataflowPipelineOptions.class);
-		pipeOptions.setJobName("redditEntitySentiment");
+		pipeOptions.setJobName("redditEntitySentiment-"+(int)(Math.random() * 10000));
 		pipeOptions.setTempLocation("gs://allenday-dev/tmp");
-		pipeOptions.setMaxNumWorkers(20);
+		pipeOptions.setMaxNumWorkers(3);
 		pipeOptions.setWorkerMachineType("n1-highcpu-64");
 		pipeOptions.setProject("allenday-dev");
 		pipeOptions.setZone("us-east1-d");
 		pipeOptions.setRunner(DataflowRunner.class);
+		pipeOptions.setDefaultWorkerLogLevel(Level.WARN);
 
     Pipeline pipeline = Pipeline.create(pipeOptions);
  
     TableReference oTableRef = new TableReference();
     oTableRef.setProjectId(pipeOptions.getProject());
-    oTableRef.setDatasetId("reddit_nlp");
-    oTableRef.setTableId("reddit_posts");
+    oTableRef.setDatasetId("reddit_nlp_posts");
+    oTableRef.setTableId("2017_05");
     
     String query =
     		"SELECT id, title, selftext " +
-    		"FROM `fh-bigquery.reddit_posts.20*`";
+//    		"FROM `fh-bigquery.reddit_posts.20*`";
+				"FROM `fh-bigquery.reddit_posts.2017_05`";
 
     pipeline
       .apply(
@@ -92,9 +95,12 @@ public class RedditCommentSentiment {
       .apply(
     		"GetSentiment",
     		ParDo.of(new DoFn<TableRow,TableRow>() { //List<Float>
+          Long sleep = 50L;
+          Long sleepStep = 50L;
+
     			@ProcessElement
     			public void processElement(ProcessContext c) {
-    				List<TableCell> cells = c.element().getF();
+            
     				String id   = (String)c.element().get("id");
     				String body =
     						(String)c.element().get("title") + "\n\n" + (String)c.element().get("selftext");
@@ -104,55 +110,71 @@ public class RedditCommentSentiment {
     					.setLanguage("en")
     					.setType(Type.PLAIN_TEXT)
     					.build();
-    				Float score = 999f;
-    				Float magnitude = 999f;
+    				Float defaultScore = 9999f;
+    				Float defaultMagnitude = 9999f;
     				
-    				try {
-    					LanguageServiceClient language = LanguageServiceClient.create();
+    				Boolean parsed = false;
+    				for ( int t = 0; t < 40; t++ ) {
+    					try {
+    						LanguageServiceClient language = LanguageServiceClient.create();
 
-    					Sentiment docSentiment = language.analyzeSentiment(doc).getDocumentSentiment();
-    					
-    					Float docScore = docSentiment.getScore();
-    					Float docMagnitude = docSentiment.getMagnitude();
-    					
-    					AnalyzeEntitySentimentResponse aesRes = language.analyzeEntitySentiment(doc, EncodingType.UTF8);
-    					List<Entity> entities = aesRes.getEntitiesList();
-    					
-	    		    TableRow row = new TableRow();
-    		      row.set("id", id);
-	    		    row.set("score", docScore);
-	    		    row.set("magnitude", docMagnitude);
+    						Sentiment docSentiment = language.analyzeSentiment(doc).getDocumentSentiment();
+    						AnalyzeEntitySentimentResponse aesRes = language.analyzeEntitySentiment(doc, EncodingType.UTF8);
 
-	    		    List<TableRow> entityRecords = new ArrayList<TableRow>();
-    					    					
-    					for (Entity entity : entities) {
-    						TableRow eRow = new TableRow();
-    						Sentiment entitySentiment = entity.getSentiment();			
-    						Map<String,Float> stats = new ArrayMap<String,Float>();
+    						Float docScore = docSentiment.getScore();
+    						Float docMagnitude = docSentiment.getMagnitude();
+    						List<Entity> entities = aesRes.getEntitiesList();
 
-    						eRow.set("name", entity.getName());	
-    						eRow.set("salience", entity.getSalience());
-    						eRow.set("magnitude", entitySentiment.getMagnitude());
-    						eRow.set("score", entitySentiment.getScore());	
-    						if ( entity.getMetadataMap().containsKey("wikipedia_url") ) {
-    							eRow.set("wikipedia", entity.getMetadataMap().get("wikipedia_url"));
+    						TableRow row = new TableRow();
+    						row.set("id", id);
+    						row.set("score", docScore);
+    						row.set("magnitude", docMagnitude);
+
+    						List<TableRow> entityRecords = new ArrayList<TableRow>();
+
+    						for (Entity entity : entities) {
+    							TableRow eRow = new TableRow();
+    							Sentiment entitySentiment = entity.getSentiment();			
+
+    							eRow.set("name", entity.getName());	
+    							eRow.set("salience", entity.getSalience());
+    							eRow.set("magnitude", entitySentiment.getMagnitude());
+    							eRow.set("score", entitySentiment.getScore());	
+    							if ( entity.getMetadataMap().containsKey("wikipedia_url") ) {
+    								eRow.set("wikipedia", entity.getMetadataMap().get("wikipedia_url"));
+    							}
+    							if ( entity.getMetadataMap().containsKey("mid") ) {
+    								eRow.set("mid", entity.getMetadataMap().get("mid"));
+    							}
+    							entityRecords.add(eRow);
     						}
-    						if ( entity.getMetadataMap().containsKey("mid") ) {
-    							eRow.set("mid", entity.getMetadataMap().get("mid"));
+    						row.set("entities", entityRecords);	      					
+    						c.output(row);
+    						parsed = true;
+    						break;
+    					} catch (Exception e) {
+    						try {
+    							//LOG.error("language API exception, sleeping 1s...");
+    							Thread.sleep(5000);
+    							//if (Math.random() < 0.1 && sleep < 1000L) {
+    							//	LOG.warn("increasing inter item sleep to " + sleep + " ms");
+    							//	sleep += sleepStep;
+    							//}
+    						} catch (InterruptedException e1) {
+    							//LOG.error("failed to sleep:\n" + e1.getStackTrace());
     						}
-    						entityRecords.add(eRow);
-    					}
-    					row.set("entities", entityRecords);	      					
+    					}    					
+    				}
+    				if ( !parsed ) {
+    					//after 200s of failures (40 attempts) capture ID  
+    					//and default score/magnitude to represent failure
+    					TableRow row = new TableRow();
+    					row.set("id", id);
+    					row.set("score", defaultScore);
+    					row.set("magnitude", defaultMagnitude);
     					c.output(row);
-						} catch (Exception e) {
-							LOG.error("language API exception, sleeping 10s...");
-							try {
-								Thread.sleep(10000);
-							} catch (InterruptedException e1) {
-								LOG.error("failed to sleep:\n" + e1.getStackTrace());
-							}
-						}    					
-    		  }
+    				}
+    			}
     	  })
       )
       .apply(
