@@ -48,7 +48,7 @@ public class RedditCommentSentiment {
     
     
     fields.add(
-        new TableFieldSchema().setName("entities").setType("RECORD").setFields(
+        new TableFieldSchema().setName("entity").setType("RECORD").setFields(
           new ArrayList<TableFieldSchema>() {
             {
               add(new TableFieldSchema().setName("name").setType("STRING"));
@@ -82,7 +82,7 @@ public class RedditCommentSentiment {
     oTableRef.setTableId("reddit_posts");
     
     String query =
-    		"SELECT CONCAT(CAST(created_utc AS STRING), '.', subreddit, '.', author) AS id, title, selftext " +
+    		"SELECT id, title, selftext " +
     		"FROM `fh-bigquery.reddit_posts.20*`";
 
     pipeline
