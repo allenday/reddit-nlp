@@ -8,29 +8,15 @@ import org.apache.beam.sdk.options.Validation;
  * Options supported by the exercise pipelines.
  */
 public interface Options extends DataflowPipelineOptions {
-
-	/*
-  @Description("Path to the data file(s) containing game data.")
-  String getInput();
-
-  void setInput(String value);
-
-  @Description("Pub/Sub topic to read from. Used if --input is empty.")
+	
+  @Description("BigQuery query to use (standard sql).")
+  String getQuery();
+  void setQuery(String value);
+  
+  @Description("Pub/Sub topic to read from. Used if --query is empty.")
   String getTopic();
-
   void setTopic(String value);
-  */
-
-	@Description("BigQuery Dataset to read from. Must already exist.")
-  @Validation.Required
-  String getInputDataset();
-  void setInputDataset(String value);
-
-  @Description("The BigQuery input table name. Must already exist.")
-  @Validation.Required
-  String getInputTableName();
-  void setInputTableName(String value);
-
+  
   @Description("BigQuery Dataset to write tables to. Must already exist.")
   @Validation.Required
   String getOutputDataset();
